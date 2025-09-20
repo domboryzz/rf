@@ -106,33 +106,29 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
     }
 
     async function startScanner() {
-      await stopCurrentStream(); // stop any previous stream to force permission prompt
+      await stopCurrentStream(); // stop previous camera to force permission prompt
 
       try {
-        const devices = await codeReader.listVideoInputDevices();
-        if (!devices.length) {
-          barcodeDiv.textContent = "Nie znaleziono kamery.";
-          return;
-        }
-
-        let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
-
-        const constraints = { video: { deviceId: { exact: selectedDevice.deviceId } } };
+        const constraints = { video: { facingMode: { exact: "environment" } } };
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
 
-        codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
-          if (result) {
-            barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
-            getProductInfo(result.text);
-            codeReader.reset();
+        codeReader.decodeFromVideoDeviceContinuously(
+          null, // null because we already set the stream manually
+          video,
+          (result, err) => {
+            if (result) {
+              barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
+              getProductInfo(result.text);
+              codeReader.reset();
+            }
+            if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
           }
-          if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
-        });
+        );
 
       } catch (err) {
         console.error(err);
-        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery.";
+        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery. Spróbuj ponownie.";
       }
     }
 
