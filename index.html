@@ -105,26 +105,24 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
     async function startScanner() {
       try {
-        // Enumerate devices first
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(d => d.kind === "videoinput");
-
-        if (!videoDevices.length) {
+        const devices = await codeReader.listVideoInputDevices();
+        if (!devices.length) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
           return;
         }
 
-        // Try to select back camera (usually last device or labeled "back")
-        let selectedDevice = videoDevices.find(d => d.label.toLowerCase().includes("back")) || videoDevices[videoDevices.length - 1];
+        // Prioritize back camera
+        let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDevice.deviceId } });
-        video.srcObject = stream;
-
-        codeReader.decodeFromVideoDevice(selectedDevice.deviceId, "video", (result, err) => {
+        // Let ZXing handle permission and stream
+        codeReader.decodeFromVideoDevice(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-            codeReader.reset(); // zatrzymuje po pierwszym wykryciu
+            codeReader.reset(); // stops after first scan
+          }
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error(err);
           }
         });
 
