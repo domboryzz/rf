@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+    // Global variables for detection accuracy
+    let detectedCodes = [];
+    let detectionCount = 0;<!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
@@ -24,16 +26,10 @@
       border-radius: 10px;
       overflow: hidden;
     }
-    video, canvas { 
+    video { 
       width: 100%;
       height: auto;
       display: block;
-    }
-    #drawingBuffer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 10;
     }
     #barcode { 
       margin-top: 15px; 
@@ -73,7 +69,6 @@
   <h1>Sprawdź Rainforest Alliance Logo</h1>
   <div id="scanner-container">
     <video id="video" autoplay muted playsinline></video>
-    <canvas id="drawingBuffer"></canvas>
   </div>
   <div>
     <button id="startBtn" onclick="startScanner()">Rozpocznij skanowanie</button>
@@ -133,7 +128,9 @@ TAK/NIE
           throw new Error('Kamera nie jest obsługiwana w tej przeglądarce');
         }
 
-        barcodeDiv.textContent = "Inicjalizuję skaner...";
+                  barcodeDiv.textContent = "Inicjalizuję skaner...";
+          detectedCodes = [];
+          detectionCount = 0;
         
         Quagga.init({
           inputStream: {
@@ -180,43 +177,55 @@ TAK/NIE
           barcodeDiv.textContent = "Skanuję kod kreskowy...";
         });
 
-        // Listen for successful barcode detection
-        Quagga.onProcessed(function(result) {
-          var drawingCtx = Quagga.canvas.ctx.overlay,
-              drawingCanvas = Quagga.canvas.dom.overlay;
+        // Store detected codes to verify accuracy
+        let detectedCodes = [];
+        let detectionCount = 0;
 
-          if (result) {
-            if (result.boxes) {
-              drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-              result.boxes.filter(function (box) {
-                return box !== result.box;
-              }).forEach(function (box) {
-                Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
-              });
-            }
-
-            if (result.box) {
-              Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
-            }
-
-            if (result.codeResult && result.codeResult.code) {
-              Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
-            }
-          }
-        });
-
+        Quagga.onDetected(function(result) {
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Wykryto kod kreskowy:", code);
           
-          barcodeDiv.textContent = `Znaleziono kod: ${code}`;
-          checkRainforestAlliance(code);
+          // Add to detection array for verification
+          detectedCodes.push(code);
+          detectionCount++;
           
-          // Stop scanning after detection to prevent multiple scans
-          Quagga.stop();
-          isScanning = false;
-          startBtn.disabled = false;
-          stopBtn.disabled = true;
+          barcodeDiv.textContent = `Weryfikuję kod... (${detectionCount}/3)`;
+          
+          // Wait for 3 consistent readings or 5 total readings
+          if (detectionCount >= 3) {
+            // Find the most common code
+            const codeCounts = {};
+            detectedCodes.forEach(c => {
+              codeCounts[c] = (codeCounts[c] || 0) + 1;
+            });
+            
+            // Get the code that appears most frequently
+            const mostCommonCode = Object.keys(codeCounts).reduce((a, b) => 
+              codeCounts[a] > codeCounts[b] ? a : b
+            );
+            
+            // If the most common code appears at least twice, use it
+            if (codeCounts[mostCommonCode] >= 2) {
+              barcodeDiv.textContent = `Znaleziono kod: ${mostCommonCode}`;
+              checkRainforestAlliance(mostCommonCode);
+              
+              // Stop scanning after detection
+              Quagga.stop();
+              isScanning = false;
+              startBtn.disabled = false;
+              stopBtn.disabled = true;
+            } else if (detectionCount >= 5) {
+              // If we can't get consistent readings after 5 attempts, use the last one
+              barcodeDiv.textContent = `Znaleziono kod: ${code} (niespójne odczyty)`;
+              checkRainforestAlliance(code);
+              
+              Quagga.stop();
+              isScanning = false;
+              startBtn.disabled = false;
+              stopBtn.disabled = true;
+            }
+          }
         });
         
       } catch (err) {
@@ -234,6 +243,10 @@ TAK/NIE
       if (isScanning) {
         Quagga.stop();
       }
+      
+      // Reset detection arrays
+      detectedCodes = [];
+      detectionCount = 0;
       
       isScanning = false;
       startBtn.disabled = false;
