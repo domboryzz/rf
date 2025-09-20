@@ -30,6 +30,7 @@
     const resultDiv = document.getElementById("result");
     const explanationDiv = document.getElementById("explanation");
     const startBtn = document.getElementById("startBtn");
+    const video = document.getElementById("video");
 
     async function askGemini(brandAndName) {
       const prompt = `Czy marka "${brandAndName}" ma produkty z certyfikatem Rainforest Alliance? 
@@ -104,8 +105,13 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
     async function startScanner() {
       try {
+        // Explicitly ask for camera permission first
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        video.srcObject = stream;
+
         const devices = await codeReader.listVideoInputDevices();
-        const selectedDeviceId = devices[0]?.deviceId;
+        let selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId;
+        if (!selectedDeviceId) selectedDeviceId = devices[0]?.deviceId;
 
         if (!selectedDeviceId) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
@@ -116,16 +122,16 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-            codeReader.reset(); // zatrzymuje po pierwszym wykryciu
+            codeReader.reset();
           }
         });
+
       } catch (err) {
         console.error(err);
-        barcodeDiv.textContent = "Błąd kamery.";
+        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery.";
       }
     }
 
-    // Start scanner only after button click
     startBtn.addEventListener("click", () => {
       startScanner();
       startBtn.disabled = true;
