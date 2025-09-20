@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Rainforest Alliance Checker</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.20.0/index.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
     body { 
       font-family: Arial, sans-serif; 
@@ -67,7 +67,6 @@
   <div id="result"></div>
 
   <script>
-    let codeReader = null;
     let isScanning = false;
     
     const barcodeDiv = document.getElementById("barcode");
@@ -99,39 +98,61 @@
           throw new Error('Kamera nie jest obsługiwana w tej przeglądarce');
         }
 
-        // Initialize the code reader
-        codeReader = new ZXing.BrowserBarcodeReader();
+        barcodeDiv.textContent = "Inicjalizuję skaner...";
         
-        // Get video devices
-        const videoInputDevices = await ZXing.BrowserBarcodeReader.listVideoInputDevices();
-        
-        if (videoInputDevices.length === 0) {
-          throw new Error('Nie znaleziono kamery');
-        }
-
-        // Use the first available camera (usually back camera on mobile)
-        const selectedDeviceId = videoInputDevices[0].deviceId;
-        
-        barcodeDiv.textContent = "Skanuję kod kreskowy...";
-        
-        // Start decoding
-        const result = await codeReader.decodeOnceFromVideoDevice(selectedDeviceId, 'video');
-        
-        if (result) {
-          barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
-          await checkRainforestAlliance(result.text);
-          
-          // Reset scanner for next scan
-          setTimeout(() => {
-            if (isScanning) {
-              startScanner();
+        Quagga.init({
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#video'),
+            constraints: {
+              width: 640,
+              height: 480,
+              facingMode: "environment" // Use back camera
             }
-          }, 3000);
-        }
-        
-        isScanning = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
+          },
+          decoder: {
+            readers: [
+              "code_128_reader",
+              "ean_reader",
+              "ean_8_reader",
+              "code_39_reader",
+              "code_39_vin_reader",
+              "codabar_reader",
+              "upc_reader",
+              "upc_e_reader"
+            ]
+          }
+        }, function(err) {
+          if (err) {
+            console.error('Błąd inicjalizacji Quagga:', err);
+            barcodeDiv.innerHTML = `<span class="error">Błąd kamery: ${err.message}</span>`;
+            return;
+          }
+          
+          console.log("Quagga zainicjalizowane");
+          Quagga.start();
+          
+          isScanning = true;
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          barcodeDiv.textContent = "Skanuję kod kreskowy...";
+        });
+
+        // Listen for successful barcode detection
+        Quagga.onDetected(function(result) {
+          const code = result.codeResult.code;
+          console.log("Wykryto kod kreskowy:", code);
+          
+          barcodeDiv.textContent = `Znaleziono kod: ${code}`;
+          checkRainforestAlliance(code);
+          
+          // Stop scanning after detection to prevent multiple scans
+          Quagga.stop();
+          isScanning = false;
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        });
         
       } catch (err) {
         console.error('Błąd skanera:', err);
@@ -145,8 +166,8 @@
     }
 
     function stopScanner() {
-      if (codeReader) {
-        codeReader.reset();
+      if (isScanning) {
+        Quagga.stop();
       }
       
       isScanning = false;
@@ -166,8 +187,8 @@
 
     // Clean up when page unloads
     window.addEventListener('beforeunload', () => {
-      if (codeReader) {
-        codeReader.reset();
+      if (isScanning) {
+        Quagga.stop();
       }
     });
   </script>
