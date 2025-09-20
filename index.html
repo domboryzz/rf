@@ -8,7 +8,7 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f5f5f5; }
     h1 { margin-bottom: 10px; }
-    #reader { width: 90%; max-width: 400px; margin: auto; border: 2px solid #333; border-radius: 10px; }
+    #reader { width: 90%; max-width: 400px; height: 300px; margin: auto; border: 2px solid #333; border-radius: 10px; }
     #barcode { margin-top: 15px; font-size: 1.2em; }
     #result { margin-top: 20px; font-size: 2em; font-weight: bold; }
     #explanation { margin-top: 10px; font-size: 1em; color: #333; }
@@ -43,9 +43,7 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
           }
         );
 
@@ -95,7 +93,6 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         }
 
         askGemini(combined);
-
       } catch (err) {
         console.error(err);
         resultDiv.textContent = "Błąd podczas pobierania informacji z OpenFoodFacts.";
@@ -106,18 +103,19 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
     startBtn.addEventListener("click", () => {
       html5QrCode.start(
-        { facingMode: "environment" },
+        { facingMode: "environment" }, // back camera
         { fps: 10, qrbox: 250 },
         (decodedText) => {
           barcodeDiv.textContent = `Znaleziono kod: ${decodedText}`;
           getProductInfo(decodedText);
-          html5QrCode.stop(); // stops after first scan
+          html5QrCode.stop();
         },
         (errorMessage) => {
           console.warn(errorMessage);
         }
       ).catch((err) => {
         console.error("Błąd podczas uruchamiania skanera:", err);
+        alert("Nie udało się uruchomić kamery. Upewnij się, że strona działa na HTTPS i że kamera jest dostępna.");
       });
 
       startBtn.disabled = true;
