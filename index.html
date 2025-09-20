@@ -2,7 +2,6 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rainforest Alliance Checker</title>
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
@@ -33,6 +32,8 @@
     const startBtn = document.getElementById("startBtn");
     const video = document.getElementById("video");
 
+    let currentStream = null;
+
     async function askGemini(brandAndName) {
       const prompt = `Czy marka "${brandAndName}" ma produkty z certyfikatem Rainforest Alliance? 
 Sprawdź zdjęcia różnych produktów tej marki i informacje w internecie. 
@@ -45,20 +46,14 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
           }
         );
 
         const data = await response.json();
         const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
 
-        if (!answer) {
-          resultDiv.textContent = "Brak odpowiedzi od Gemini.";
-          return;
-        }
-
+        if (!answer) { resultDiv.textContent = "Brak odpowiedzi od Gemini."; return; }
         if (answer.startsWith("tak")) {
           resultDiv.innerHTML = `<span class="yes">TAK</span>`;
           explanationDiv.textContent = answer.replace(/^tak[, ]*/i, "");
@@ -97,14 +92,22 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         }
 
         askGemini(combined);
-
       } catch (err) {
         console.error(err);
         resultDiv.textContent = "Błąd podczas pobierania informacji z OpenFoodFacts.";
       }
     }
 
+    async function stopCurrentStream() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+      }
+    }
+
     async function startScanner() {
+      await stopCurrentStream(); // stop any previous stream to force permission prompt
+
       try {
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
@@ -112,18 +115,19 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
           return;
         }
 
-        // Prefer back camera
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
+
+        const constraints = { video: { deviceId: { exact: selectedDevice.deviceId } } };
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentStream;
 
         codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-            codeReader.reset(); // stop after first scan
+            codeReader.reset();
           }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-            console.error(err);
-          }
+          if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
         });
 
       } catch (err) {
@@ -134,8 +138,6 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
     startBtn.addEventListener("click", () => {
       startScanner();
-      startBtn.disabled = true;
-      startBtn.textContent = "Skaner uruchomiony";
     });
   </script>
 </body>
