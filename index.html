@@ -105,24 +105,26 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
     async function startScanner() {
       try {
-        // Explicitly ask for camera permission first
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        video.srcObject = stream;
+        // Enumerate devices first
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === "videoinput");
 
-        const devices = await codeReader.listVideoInputDevices();
-        let selectedDeviceId = devices.find(d => d.label.toLowerCase().includes("back"))?.deviceId;
-        if (!selectedDeviceId) selectedDeviceId = devices[0]?.deviceId;
-
-        if (!selectedDeviceId) {
+        if (!videoDevices.length) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
           return;
         }
 
-        codeReader.decodeFromVideoDevice(selectedDeviceId, "video", (result, err) => {
+        // Try to select back camera (usually last device or labeled "back")
+        let selectedDevice = videoDevices.find(d => d.label.toLowerCase().includes("back")) || videoDevices[videoDevices.length - 1];
+
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDevice.deviceId } });
+        video.srcObject = stream;
+
+        codeReader.decodeFromVideoDevice(selectedDevice.deviceId, "video", (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-            codeReader.reset();
+            codeReader.reset(); // zatrzymuje po pierwszym wykryciu
           }
         });
 
