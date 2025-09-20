@@ -3,38 +3,41 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rainforest Alliance Checker</title>
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <title>Rainforest Alliance Scanner</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background: #f5f5f5; }
-    h1 { margin-bottom: 10px; }
-    video { width: 90%; max-width: 500px; border: 2px solid #333; border-radius: 10px; margin-top: 15px; }
-    #barcode { margin-top: 15px; font-size: 1.2em; }
-    #result { margin-top: 20px; font-size: 2em; font-weight: bold; }
-    #explanation { margin-top: 10px; font-size: 1em; color: #333; }
+    #scanner-container {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      margin: auto;
+    }
+    #scanner-preview {
+      width: 100%;
+      height: auto;
+    }
+    #barcode-result {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #result { text-align: center; font-size: 20px; margin-top: 10px; font-weight: bold; }
+    #explanation { text-align: center; margin-top: 5px; font-size: 16px; color: #333; }
     .yes { color: green; }
     .no { color: red; }
-    button { margin-top: 20px; padding: 10px 20px; font-size: 1em; cursor: pointer; }
   </style>
 </head>
 <body>
-  <h1>Sprawdź Rainforest Alliance</h1>
-  <button id="startBtn">Uruchom skaner</button>
-  <video id="video" autoplay playsinline></video>
-  <div id="barcode">Skanuję kod kreskowy...</div>
+  <h1 style="text-align:center;">Rainforest Alliance Checker</h1>
+  <div id="scanner-container">
+    <div id="scanner-preview"></div>
+    <div id="barcode-result">Scan a barcode...</div>
+  </div>
   <div id="result"></div>
   <div id="explanation"></div>
 
   <script>
-    const codeReader = new ZXing.BrowserBarcodeReader();
-    const barcodeDiv = document.getElementById("barcode");
-    const resultDiv = document.getElementById("result");
-    const explanationDiv = document.getElementById("explanation");
-    const startBtn = document.getElementById("startBtn");
-    const video = document.getElementById("video");
-
-    let currentStream = null;
-
     async function askGemini(brandAndName) {
       const prompt = `Czy marka "${brandAndName}" ma produkty z certyfikatem Rainforest Alliance? 
 Sprawdź zdjęcia różnych produktów tej marki i informacje w internecie. 
@@ -54,6 +57,9 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         const data = await response.json();
         const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
 
+        const resultDiv = document.getElementById("result");
+        const explanationDiv = document.getElementById("explanation");
+
         if (!answer) { resultDiv.textContent = "Brak odpowiedzi od Gemini."; return; }
         if (answer.startsWith("tak")) {
           resultDiv.innerHTML = `<span class="yes">TAK</span>`;
@@ -67,7 +73,7 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         }
       } catch (err) {
         console.error(err);
-        resultDiv.textContent = "Błąd podczas łączenia z Gemini.";
+        document.getElementById("result").textContent = "Błąd podczas łączenia z Gemini.";
       }
     }
 
@@ -77,8 +83,8 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         const data = await response.json();
 
         if (!data.product) {
-          resultDiv.innerHTML = `<span class="no">Produkt nie znaleziony</span>`;
-          explanationDiv.textContent = "";
+          document.getElementById("result").innerHTML = `<span class="no">Produkt nie znaleziony</span>`;
+          document.getElementById("explanation").textContent = "";
           return;
         }
 
@@ -87,55 +93,41 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
         const combined = `${brand} ${productName}`.trim();
 
         if (!combined) {
-          resultDiv.innerHTML = `<span class="no">Brak informacji o produkcie</span>`;
-          explanationDiv.textContent = "";
+          document.getElementById("result").innerHTML = `<span class="no">Brak informacji o produkcie</span>`;
+          document.getElementById("explanation").textContent = "";
           return;
         }
 
         askGemini(combined);
       } catch (err) {
         console.error(err);
-        resultDiv.textContent = "Błąd podczas pobierania informacji z OpenFoodFacts.";
+        document.getElementById("result").textContent = "Błąd podczas pobierania informacji z OpenFoodFacts.";
       }
     }
 
-    async function stopCurrentStream() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        currentStream = null;
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: document.querySelector('#scanner-preview'),
+        constraints: { facingMode: "environment" } // prefer back camera
+      },
+      decoder: {
+        readers: ["code_128_reader", "ean_reader", "ean_8_reader"]
       }
-    }
-
-    async function startScanner() {
-      await stopCurrentStream(); // stop previous camera to force permission prompt
-
-      try {
-        // Prefer back camera but fallback if not available
-        const constraints = { video: { facingMode: { ideal: "environment" } } };
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = currentStream;
-
-        codeReader.decodeFromVideoDeviceContinuously(
-          null, // null because we already set the stream manually
-          video,
-          (result, err) => {
-            if (result) {
-              barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
-              getProductInfo(result.text);
-              codeReader.reset(); // stop after first successful scan
-            }
-            if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
-          }
-        );
-
-      } catch (err) {
+    }, function(err) {
+      if (err) {
         console.error(err);
-        barcodeDiv.textContent = "Błąd dostępu do kamery. Spróbuj ponownie.";
+        return;
       }
-    }
+      Quagga.start();
+    });
 
-    startBtn.addEventListener("click", () => {
-      startScanner();
+    Quagga.onDetected(function(data) {
+      const barcode = data.codeResult.code;
+      document.getElementById('barcode-result').innerText = `Barcode: ${barcode}`;
+      Quagga.stop(); // stop after first scan
+      getProductInfo(barcode);
     });
   </script>
 </body>
