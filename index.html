@@ -71,8 +71,6 @@
   <script>
     let html5QrcodeScanner = null;
     let isScanning = false;
-    let detectedCodes = [];
-    let detectionCount = 0;
     
     const barcodeDiv = document.getElementById("barcode");
     const resultDiv = document.getElementById("result");
@@ -83,12 +81,14 @@
     async function checkRainforestAlliance(barcode) {
       resultDiv.innerHTML = '<span class="loading">Sprawdzam...</span>';
       
-      const prompt = `Czy produkt o kodzie kreskowym ${barcode} posiada certyfikat Rainforest Alliance? 
-      
-Odpowiedz tylko "TAK" lub "NIE", a następnie jeśli TAK, dodaj link do strony producenta lub zdjęcie produktu gdzie widać logo Rainforest Alliance.
+      const prompt = `Sprawdź kod kreskowy ${barcode}:
 
-Format odpowiedzi:
-TAK/NIE
+1. Jaka to marka i nazwa produktu?
+2. Czy ten produkt posiada certyfikat Rainforest Alliance?
+
+Odpowiedz w formacie:
+PRODUKT: [nazwa produktu i marka]
+RAINFOREST ALLIANCE: TAK/NIE
 [opcjonalnie: link lub opis gdzie można zobaczyć logo]`;
       
       console.log('Sprawdzam kod:', barcode);
@@ -97,59 +97,56 @@ TAK/NIE
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Mock response - in reality this would check against a database
-      const responses = [
-        { hasLogo: true, info: "https://example-producer.com/rainforest-certification" },
-        { hasLogo: true, info: "Logo widoczne na opakowaniu z tyłu, obok składników" },
-        { hasLogo: false, info: "" },
-        { hasLogo: true, info: "https://rainforest-alliance.org/find-certified/product-search" }
+      const mockProducts = [
+        { 
+          name: "Nestlé KitKat", 
+          hasLogo: true, 
+          info: "Logo widoczne na opakowaniu z tyłu" 
+        },
+        { 
+          name: "Coca-Cola", 
+          hasLogo: false, 
+          info: "" 
+        },
+        { 
+          name: "Hershey's Dark Chocolate", 
+          hasLogo: true, 
+          info: "https://www.thehersheycompany.com/en_us/responsibility/good-business/creating-goodness/sustainable-sourcing.html" 
+        },
+        { 
+          name: "Mars Snickers", 
+          hasLogo: true, 
+          info: "Certyfikat widoczny na przedniej stronie opakowania" 
+        },
+        { 
+          name: "Unilever Ben & Jerry's", 
+          hasLogo: false, 
+          info: "" 
+        }
       ];
       
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      const randomProduct = mockProducts[Math.floor(Math.random() * mockProducts.length)];
       
-      if (randomResponse.hasLogo) {
-        resultDiv.innerHTML = `
-          <span class="yes">TAK - Posiada certyfikat Rainforest Alliance</span>
-          ${randomResponse.info ? `<div style="margin-top: 10px; font-size: 0.8em; color: #333;">${randomResponse.info}</div>` : ''}
-        `;
+      let resultHTML = `<div style="font-size: 0.7em; margin-bottom: 15px; color: #666;">PRODUKT: ${randomProduct.name}</div>`;
+      
+      if (randomProduct.hasLogo) {
+        resultHTML += `<span class="yes">TAK - Posiada certyfikat Rainforest Alliance</span>`;
+        if (randomProduct.info) {
+          resultHTML += `<div style="margin-top: 10px; font-size: 0.6em; color: #333;">${randomProduct.info}</div>`;
+        }
       } else {
-        resultDiv.innerHTML = '<span class="no">NIE - Brak certyfikatu Rainforest Alliance</span>';
+        resultHTML += '<span class="no">NIE - Brak certyfikatu Rainforest Alliance</span>';
       }
+      
+      resultDiv.innerHTML = resultHTML;
     }
 
     function onScanSuccess(decodedText, decodedResult) {
       console.log("Wykryto kod:", decodedText);
       
-      // Add to detection array for verification
-      detectedCodes.push(decodedText);
-      detectionCount++;
-      
-      barcodeDiv.textContent = `Weryfikuję kod... (${detectionCount}/3)`;
-      
-      // Wait for 3 consistent readings or 5 total readings
-      if (detectionCount >= 3) {
-        // Find the most common code
-        const codeCounts = {};
-        detectedCodes.forEach(c => {
-          codeCounts[c] = (codeCounts[c] || 0) + 1;
-        });
-        
-        // Get the code that appears most frequently
-        const mostCommonCode = Object.keys(codeCounts).reduce((a, b) => 
-          codeCounts[a] > codeCounts[b] ? a : b
-        );
-        
-        // If the most common code appears at least twice, use it
-        if (codeCounts[mostCommonCode] >= 2) {
-          barcodeDiv.textContent = `Znaleziono kod: ${mostCommonCode}`;
-          checkRainforestAlliance(mostCommonCode);
-          stopScanner();
-        } else if (detectionCount >= 5) {
-          // If we can't get consistent readings after 5 attempts, use the last one
-          barcodeDiv.textContent = `Znaleziono kod: ${decodedText} (niespójne odczyty)`;
-          checkRainforestAlliance(decodedText);
-          stopScanner();
-        }
-      }
+      barcodeDiv.textContent = `Znaleziono kod: ${decodedText}`;
+      checkRainforestAlliance(decodedText);
+      stopScanner();
     }
 
     function onScanFailure(error) {
@@ -159,8 +156,6 @@ TAK/NIE
     function startScanner() {
       try {
         barcodeDiv.textContent = "Inicjalizuję skaner...";
-        detectedCodes = [];
-        detectionCount = 0;
 
         html5QrcodeScanner = new Html5QrcodeScanner(
           "scanner-container",
@@ -168,7 +163,8 @@ TAK/NIE
             fps: 10,
             qrbox: { width: 250, height: 250 },
             aspectRatio: 1.777778,
-            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+            preferredCamera: "environment"
           },
           false
         );
@@ -197,10 +193,6 @@ TAK/NIE
           console.error("Failed to clear html5QrcodeScanner.", error);
         });
       }
-      
-      // Reset detection arrays
-      detectedCodes = [];
-      detectionCount = 0;
       
       isScanning = false;
       startBtn.disabled = false;
