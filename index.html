@@ -15,12 +15,25 @@
       margin-bottom: 10px; 
       color: #2c5f2d;
     }
-    video { 
-      width: 90%; 
-      max-width: 500px; 
-      border: 2px solid #333; 
-      border-radius: 10px; 
-      margin: 20px 0;
+    #scanner-container {
+      position: relative;
+      width: 90%;
+      max-width: 500px;
+      margin: 20px auto;
+      border: 2px solid #333;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    video, canvas { 
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    #drawingBuffer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
     }
     #barcode { 
       margin-top: 15px; 
@@ -58,7 +71,10 @@
 </head>
 <body>
   <h1>Sprawdź Rainforest Alliance Logo</h1>
-  <video id="video" autoplay muted playsinline></video>
+  <div id="scanner-container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="drawingBuffer"></canvas>
+  </div>
   <div>
     <button id="startBtn" onclick="startScanner()">Rozpocznij skanowanie</button>
     <button id="stopBtn" onclick="stopScanner()" disabled>Zatrzymaj skanowanie</button>
@@ -78,15 +94,34 @@
     async function checkRainforestAlliance(barcode) {
       resultDiv.innerHTML = '<span class="loading">Sprawdzam...</span>';
       
+      const prompt = `Czy produkt o kodzie kreskowym ${barcode} posiada certyfikat Rainforest Alliance? 
+      
+Odpowiedz tylko "TAK" lub "NIE", a następnie jeśli TAK, dodaj link do strony producenta lub zdjęcie produktu gdzie widać logo Rainforest Alliance.
+
+Format odpowiedzi:
+TAK/NIE
+[opcjonalnie: link lub opis gdzie można zobaczyć logo]`;
+      
+      console.log('Sprawdzam kod:', barcode);
+      
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Mock response - in reality this would check against a database
-      // For demonstration, let's say barcodes containing "123" have the certification
-      const hasLogo = barcode.includes('123') || Math.random() > 0.5;
+      const responses = [
+        { hasLogo: true, info: "https://example-producer.com/rainforest-certification" },
+        { hasLogo: true, info: "Logo widoczne na opakowaniu z tyłu, obok składników" },
+        { hasLogo: false, info: "" },
+        { hasLogo: true, info: "https://rainforest-alliance.org/find-certified/product-search" }
+      ];
       
-      if (hasLogo) {
-        resultDiv.innerHTML = '<span class="yes">TAK - Posiada certyfikat Rainforest Alliance</span>';
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      
+      if (randomResponse.hasLogo) {
+        resultDiv.innerHTML = `
+          <span class="yes">TAK - Posiada certyfikat Rainforest Alliance</span>
+          ${randomResponse.info ? `<div style="margin-top: 10px; font-size: 0.8em; color: #333;">${randomResponse.info}</div>` : ''}
+        `;
       } else {
         resultDiv.innerHTML = '<span class="no">NIE - Brak certyfikatu Rainforest Alliance</span>';
       }
@@ -104,13 +139,18 @@
           inputStream: {
             name: "Live",
             type: "LiveStream",
-            target: document.querySelector('#video'),
+            target: document.querySelector('#scanner-container'),
             constraints: {
               width: 640,
               height: 480,
               facingMode: "environment" // Use back camera
             }
           },
+          locator: {
+            patchSize: "medium",
+            halfSample: true
+          },
+          numOfWorkers: 2,
           decoder: {
             readers: [
               "code_128_reader",
@@ -122,7 +162,8 @@
               "upc_reader",
               "upc_e_reader"
             ]
-          }
+          },
+          locate: true
         }, function(err) {
           if (err) {
             console.error('Błąd inicjalizacji Quagga:', err);
@@ -140,6 +181,30 @@
         });
 
         // Listen for successful barcode detection
+        Quagga.onProcessed(function(result) {
+          var drawingCtx = Quagga.canvas.ctx.overlay,
+              drawingCanvas = Quagga.canvas.dom.overlay;
+
+          if (result) {
+            if (result.boxes) {
+              drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+              result.boxes.filter(function (box) {
+                return box !== result.box;
+              }).forEach(function (box) {
+                Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+              });
+            }
+
+            if (result.box) {
+              Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+            }
+
+            if (result.codeResult && result.codeResult.code) {
+              Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+            }
+          }
+        });
+
         Quagga.onDetected(function(result) {
           const code = result.codeResult.code;
           console.log("Wykryto kod kreskowy:", code);
