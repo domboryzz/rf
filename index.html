@@ -1,11 +1,9 @@
-    // Global variables for detection accuracy
-    let detectedCodes = [];
-    let detectionCount = 0;<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
   <title>Rainforest Alliance Checker</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { 
       font-family: Arial, sans-serif; 
@@ -18,18 +16,13 @@
       color: #2c5f2d;
     }
     #scanner-container {
-      position: relative;
       width: 90%;
       max-width: 500px;
       margin: 20px auto;
       border: 2px solid #333;
       border-radius: 10px;
       overflow: hidden;
-    }
-    video { 
-      width: 100%;
-      height: auto;
-      display: block;
+      min-height: 300px;
     }
     #barcode { 
       margin-top: 15px; 
@@ -67,9 +60,7 @@
 </head>
 <body>
   <h1>Sprawdź Rainforest Alliance Logo</h1>
-  <div id="scanner-container">
-    <video id="video" autoplay muted playsinline></video>
-  </div>
+  <div id="scanner-container"></div>
   <div>
     <button id="startBtn" onclick="startScanner()">Rozpocznij skanowanie</button>
     <button id="stopBtn" onclick="stopScanner()" disabled>Zatrzymaj skanowanie</button>
@@ -78,7 +69,10 @@
   <div id="result"></div>
 
   <script>
+    let html5QrcodeScanner = null;
     let isScanning = false;
+    let detectedCodes = [];
+    let detectionCount = 0;
     
     const barcodeDiv = document.getElementById("barcode");
     const resultDiv = document.getElementById("result");
@@ -122,111 +116,69 @@ TAK/NIE
       }
     }
 
-    async function startScanner() {
-      try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('Kamera nie jest obsługiwana w tej przeglądarce');
-        }
-
-                  barcodeDiv.textContent = "Inicjalizuję skaner...";
-          detectedCodes = [];
-          detectionCount = 0;
+    function onScanSuccess(decodedText, decodedResult) {
+      console.log("Wykryto kod:", decodedText);
+      
+      // Add to detection array for verification
+      detectedCodes.push(decodedText);
+      detectionCount++;
+      
+      barcodeDiv.textContent = `Weryfikuję kod... (${detectionCount}/3)`;
+      
+      // Wait for 3 consistent readings or 5 total readings
+      if (detectionCount >= 3) {
+        // Find the most common code
+        const codeCounts = {};
+        detectedCodes.forEach(c => {
+          codeCounts[c] = (codeCounts[c] || 0) + 1;
+        });
         
-        Quagga.init({
-          inputStream: {
-            name: "Live",
-            type: "LiveStream",
-            target: document.querySelector('#video'),
-            constraints: {
-              width: 640,
-              height: 480,
-              facingMode: "environment" // Use back camera
-            }
-          },
-          locator: {
-            patchSize: "medium",
-            halfSample: true
-          },
-          numOfWorkers: 2,
-          decoder: {
-            readers: [
-              "code_128_reader",
-              "ean_reader",
-              "ean_8_reader",
-              "code_39_reader",
-              "code_39_vin_reader",
-              "codabar_reader",
-              "upc_reader",
-              "upc_e_reader"
-            ]
-          },
-          locate: true
-        }, function(err) {
-          if (err) {
-            console.error('Błąd inicjalizacji Quagga:', err);
-            barcodeDiv.innerHTML = `<span class="error">Błąd kamery: ${err.message}</span>`;
-            return;
-          }
-          
-          console.log("Quagga zainicjalizowane");
-          Quagga.start();
-          
-          isScanning = true;
-          startBtn.disabled = true;
-          stopBtn.disabled = false;
-          barcodeDiv.textContent = "Skanuję kod kreskowy...";
-        });
+        // Get the code that appears most frequently
+        const mostCommonCode = Object.keys(codeCounts).reduce((a, b) => 
+          codeCounts[a] > codeCounts[b] ? a : b
+        );
+        
+        // If the most common code appears at least twice, use it
+        if (codeCounts[mostCommonCode] >= 2) {
+          barcodeDiv.textContent = `Znaleziono kod: ${mostCommonCode}`;
+          checkRainforestAlliance(mostCommonCode);
+          stopScanner();
+        } else if (detectionCount >= 5) {
+          // If we can't get consistent readings after 5 attempts, use the last one
+          barcodeDiv.textContent = `Znaleziono kod: ${decodedText} (niespójne odczyty)`;
+          checkRainforestAlliance(decodedText);
+          stopScanner();
+        }
+      }
+    }
 
-        // Store detected codes to verify accuracy
-        let detectedCodes = [];
-        let detectionCount = 0;
+    function onScanFailure(error) {
+      // Handle scan failures silently - this is normal during scanning
+    }
 
-        Quagga.onDetected(function(result) {
-        Quagga.onDetected(function(result) {
-          const code = result.codeResult.code;
-          console.log("Wykryto kod kreskowy:", code);
-          
-          // Add to detection array for verification
-          detectedCodes.push(code);
-          detectionCount++;
-          
-          barcodeDiv.textContent = `Weryfikuję kod... (${detectionCount}/3)`;
-          
-          // Wait for 3 consistent readings or 5 total readings
-          if (detectionCount >= 3) {
-            // Find the most common code
-            const codeCounts = {};
-            detectedCodes.forEach(c => {
-              codeCounts[c] = (codeCounts[c] || 0) + 1;
-            });
-            
-            // Get the code that appears most frequently
-            const mostCommonCode = Object.keys(codeCounts).reduce((a, b) => 
-              codeCounts[a] > codeCounts[b] ? a : b
-            );
-            
-            // If the most common code appears at least twice, use it
-            if (codeCounts[mostCommonCode] >= 2) {
-              barcodeDiv.textContent = `Znaleziono kod: ${mostCommonCode}`;
-              checkRainforestAlliance(mostCommonCode);
-              
-              // Stop scanning after detection
-              Quagga.stop();
-              isScanning = false;
-              startBtn.disabled = false;
-              stopBtn.disabled = true;
-            } else if (detectionCount >= 5) {
-              // If we can't get consistent readings after 5 attempts, use the last one
-              barcodeDiv.textContent = `Znaleziono kod: ${code} (niespójne odczyty)`;
-              checkRainforestAlliance(code);
-              
-              Quagga.stop();
-              isScanning = false;
-              startBtn.disabled = false;
-              stopBtn.disabled = true;
-            }
-          }
-        });
+    function startScanner() {
+      try {
+        barcodeDiv.textContent = "Inicjalizuję skaner...";
+        detectedCodes = [];
+        detectionCount = 0;
+
+        html5QrcodeScanner = new Html5QrcodeScanner(
+          "scanner-container",
+          { 
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.777778,
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+          },
+          false
+        );
+
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        
+        isScanning = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        barcodeDiv.textContent = "Skanuję kod kreskowy...";
         
       } catch (err) {
         console.error('Błąd skanera:', err);
@@ -240,8 +192,10 @@ TAK/NIE
     }
 
     function stopScanner() {
-      if (isScanning) {
-        Quagga.stop();
+      if (html5QrcodeScanner && isScanning) {
+        html5QrcodeScanner.clear().catch(error => {
+          console.error("Failed to clear html5QrcodeScanner.", error);
+        });
       }
       
       // Reset detection arrays
@@ -265,8 +219,8 @@ TAK/NIE
 
     // Clean up when page unloads
     window.addEventListener('beforeunload', () => {
-      if (isScanning) {
-        Quagga.stop();
+      if (html5QrcodeScanner && isScanning) {
+        html5QrcodeScanner.clear();
       }
     });
   </script>
