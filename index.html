@@ -2,6 +2,7 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rainforest Alliance Checker</title>
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
@@ -109,7 +110,8 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
       await stopCurrentStream(); // stop previous camera to force permission prompt
 
       try {
-        const constraints = { video: { facingMode: { exact: "environment" } } };
+        // Prefer back camera but fallback if not available
+        const constraints = { video: { facingMode: { ideal: "environment" } } };
         currentStream = await navigator.mediaDevices.getUserMedia(constraints);
         video.srcObject = currentStream;
 
@@ -120,7 +122,7 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
             if (result) {
               barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
               getProductInfo(result.text);
-              codeReader.reset();
+              codeReader.reset(); // stop after first successful scan
             }
             if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
           }
@@ -128,7 +130,7 @@ Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego – np. znalazłeś dowód na
 
       } catch (err) {
         console.error(err);
-        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery. Spróbuj ponownie.";
+        barcodeDiv.textContent = "Błąd dostępu do kamery. Spróbuj ponownie.";
       }
     }
 
