@@ -111,17 +111,6 @@
         // Reset ZXing
         codeReader.reset();
 
-        // Always request camera permission explicitly
-        let stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          // Stop the stream immediately, just to trigger permission prompt
-          stream.getTracks().forEach(track => track.stop());
-        } catch (permErr) {
-          barcodeDiv.textContent = "Odmowa dostępu do kamery.";
-          return;
-        }
-
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
@@ -131,7 +120,7 @@
         // Prefer back camera if available
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
 
-        // Start scanning with a fresh permission request
+        // Start scanning
         codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
