@@ -102,6 +102,13 @@
 
     async function startScanner() {
       try {
+        // Reset any previous session
+        codeReader.reset();
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(track => track.stop());
+          video.srcObject = null;
+        }
+
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
@@ -111,13 +118,13 @@
         // Prefer back camera
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
 
-        // Continuous scanning
+        // Start scanning
         codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
 
-            // ✅ Stop scanner and release camera immediately
+            // Stop scanner and release camera
             codeReader.reset();
             if (video.srcObject) {
               video.srcObject.getTracks().forEach(track => track.stop());
