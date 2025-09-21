@@ -111,25 +111,26 @@
         // Reset ZXing
         codeReader.reset();
 
+        // Check for camera devices first
+        const devices = await codeReader.listVideoInputDevices();
+        if (!devices.length) {
+          barcodeDiv.textContent = "Nie znaleziono kamery. Upewnij się, że kamera jest podłączona i nie jest używana przez inną aplikację.";
+          return;
+        }
+
         // Manually request camera permission
         let manualStream;
         try {
-          manualStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          manualStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: devices[0].deviceId } });
           // Stop the manual stream immediately
           manualStream.getTracks().forEach(track => track.stop());
         } catch (permErr) {
-          barcodeDiv.textContent = "Odmowa dostępu do kamery.";
+          barcodeDiv.textContent = "Odmowa dostępu do kamery. Sprawdź uprawnienia w przeglądarce.";
           return;
         }
 
-        // Wait briefly to ensure camera is released
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const devices = await codeReader.listVideoInputDevices();
-        if (!devices.length) {
-          barcodeDiv.textContent = "Nie znaleziono kamery.";
-          return;
-        }
+        // Wait longer to ensure camera is released
+        await new Promise(resolve => setTimeout(resolve, 300));
 
         // Prefer back camera if available
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
@@ -148,7 +149,7 @@
         });
       } catch (err) {
         console.error(err);
-        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery.";
+        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery. Upewnij się, że kamera jest podłączona, nie jest używana przez inną aplikację i przeglądarka ma odpowiednie uprawnienia.";
       }
     }
 
