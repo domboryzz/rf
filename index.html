@@ -111,6 +111,20 @@
         // Reset ZXing
         codeReader.reset();
 
+        // Manually request camera permission
+        let manualStream;
+        try {
+          manualStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          // Stop the manual stream immediately
+          manualStream.getTracks().forEach(track => track.stop());
+        } catch (permErr) {
+          barcodeDiv.textContent = "Odmowa dostępu do kamery.";
+          return;
+        }
+
+        // Wait briefly to ensure camera is released
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
           barcodeDiv.textContent = "Nie znaleziono kamery.";
