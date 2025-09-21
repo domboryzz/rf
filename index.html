@@ -118,10 +118,13 @@
           return;
         }
 
-        // Manually request camera permission
+        // Always prefer back camera if available
+        let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
+
+        // Manually request camera permission for back camera
         let manualStream;
         try {
-          manualStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: devices[0].deviceId } });
+          manualStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDevice.deviceId } });
           // Stop the manual stream immediately
           manualStream.getTracks().forEach(track => track.stop());
         } catch (permErr) {
@@ -132,10 +135,7 @@
         // Wait longer to ensure camera is released
         await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Prefer back camera if available
-        let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
-
-        // Start scanning
+        // Start scanning with back camera
         codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
