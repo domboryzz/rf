@@ -12,7 +12,8 @@
     #barcode { margin-top: 15px; font-size: 1.2em; }
     #result { margin-top: 20px; font-size: 2em; font-weight: bold; }
     #explanation { margin-top: 10px; font-size: 1em; color: #333; }
-    .yes { color: green; } .no { color: red; }
+    .yes { color: green; }
+    .no { color: red; }
     button { margin-top: 20px; padding: 10px 20px; font-size: 1em; cursor: pointer; }
   </style>
 </head>
@@ -115,7 +116,13 @@
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-            codeReader.reset(); // stop after first scan
+
+            // ✅ Stop scanner and release camera immediately
+            codeReader.reset();
+            if (video.srcObject) {
+              video.srcObject.getTracks().forEach(track => track.stop());
+              video.srcObject = null;
+            }
           }
           if (err && !(err instanceof ZXing.NotFoundException)) {
             console.error(err);
@@ -129,8 +136,9 @@
 
     startBtn.addEventListener("click", () => {
       startScanner();
-      startBtn.disabled = true;
-      startBtn.textContent = "Skaner uruchomiony";
+      barcodeDiv.textContent = "Skanuję kod kreskowy...";
+      resultDiv.textContent = "";
+      explanationDiv.textContent = "";
     });
   </script>
 </body>
