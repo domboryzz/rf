@@ -102,12 +102,14 @@
 
     async function startScanner() {
       try {
-        // Reset any previous session
-        codeReader.reset();
+        // Stop previous camera stream if exists to force new permission
         if (video.srcObject) {
           video.srcObject.getTracks().forEach(track => track.stop());
           video.srcObject = null;
         }
+
+        // Reset ZXing
+        codeReader.reset();
 
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
@@ -115,25 +117,20 @@
           return;
         }
 
-        // Prefer back camera
+        // Prefer back camera if available
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
 
-        // Start scanning
+        // Start scanning with a fresh permission request
         codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
           if (result) {
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
 
-            // Stop scanner and release camera
+            // Stop scanner after first detection
             codeReader.reset();
-            if (video.srcObject) {
-              video.srcObject.getTracks().forEach(track => track.stop());
-              video.srcObject = null;
-            }
+            if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
           }
-          if (err && !(err instanceof ZXing.NotFoundException)) {
-            console.error(err);
-          }
+          if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
         });
       } catch (err) {
         console.error(err);
