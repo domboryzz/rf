@@ -34,13 +34,10 @@
     const video = document.getElementById("video");
 
     async function askGemini(brandAndName) {
-      const prompt = `Czy marka "${brandAndName}" ma produkty z certyfikatem Rainforest Alliance? 
-      Sprawdź zdjęcia różnych produktów tej marki i informacje w internecie. 
-      Odpowiedz tylko "tak" albo "nie". Jeśli odpowiesz "tak", krótko wyjaśnij dlaczego.`;
-
+      const prompt = `Czy marka "${brandAndName}" ma produkty z certyfikatem Rainforest Alliance?\nSprawdź zdjęcia różnych produktów tej marki i informacje w internecie.\nOdpowiedz tylko \"tak\" albo \"nie\". Jeśli odpowiesz \"tak\", krótko wyjaśnij dlaczego.`;
       try {
         const response = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=YOUR_API_KEY",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=AIzaSyDU9GAFN0h4c91k11Cf2bKhQ--SoNrKj0",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -51,16 +48,15 @@
         );
         const data = await response.json();
         const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().toLowerCase();
-
         if (!answer) {
           resultDiv.textContent = "Brak odpowiedzi od Gemini.";
           return;
         }
         if (answer.startsWith("tak")) {
-          resultDiv.innerHTML = `<span class="yes">TAK</span>`;
+          resultDiv.innerHTML = `<span class=\"yes\">TAK</span>`;
           explanationDiv.textContent = answer.replace(/^tak[, ]*/i, "");
         } else if (answer.startsWith("nie")) {
-          resultDiv.innerHTML = `<span class="no">NIE</span>`;
+          resultDiv.innerHTML = `<span class=\"no\">NIE</span>`;
           explanationDiv.textContent = "";
         } else {
           resultDiv.textContent = "Niejasna odpowiedź.";
@@ -102,62 +98,46 @@
 
     async function startScanner() {
       try {
-        // Stop previous camera stream if exists to force new permission
+        // Stop previous camera stream if exists
         if (video.srcObject) {
           video.srcObject.getTracks().forEach(track => track.stop());
           video.srcObject = null;
         }
-
-        // Reset ZXing
         codeReader.reset();
-
-        // Check for camera devices first
         const devices = await codeReader.listVideoInputDevices();
         if (!devices.length) {
-          barcodeDiv.textContent = "Nie znaleziono kamery. Upewnij się, że kamera jest podłączona i nie jest używana przez inną aplikację.";
+          barcodeDiv.textContent = "Nie znaleziono kamery.";
           return;
         }
-
-        // Always prefer back camera if available
         let selectedDevice = devices.find(d => d.label.toLowerCase().includes("back")) || devices[devices.length - 1];
-
-        // Manually request camera permission for back camera
-        let manualStream;
-        try {
-          manualStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: selectedDevice.deviceId } });
-          // Stop the manual stream immediately
-          manualStream.getTracks().forEach(track => track.stop());
-        } catch (permErr) {
-          barcodeDiv.textContent = "Odmowa dostępu do kamery. Sprawdź uprawnienia w przeglądarce.";
-          return;
-        }
-
-        // Wait longer to ensure camera is released
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // Start scanning with back camera
-        codeReader.decodeFromVideoDeviceContinuously(selectedDevice.deviceId, video, (result, err) => {
-          if (result) {
+        let scanning = true;
+        codeReader.decodeFromVideoDevice(selectedDevice.deviceId, video, (result, err) => {
+          if (result && scanning) {
+            scanning = false;
             barcodeDiv.textContent = `Znaleziono kod: ${result.text}`;
             getProductInfo(result.text);
-
-            // Stop scanner after first detection
             codeReader.reset();
             if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+            startBtn.disabled = false;
+            startBtn.textContent = "Uruchom ponownie";
           }
-          if (err && !(err instanceof ZXing.NotFoundException)) console.error(err);
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error(err);
+          }
         });
       } catch (err) {
         console.error(err);
-        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery. Upewnij się, że kamera jest podłączona, nie jest używana przez inną aplikację i przeglądarka ma odpowiednie uprawnienia.";
+        barcodeDiv.textContent = "Odmowa dostępu do kamery lub brak kamery.";
       }
     }
 
     startBtn.addEventListener("click", () => {
-      startScanner();
-      barcodeDiv.textContent = "Skanuję kod kreskowy...";
-      resultDiv.textContent = "";
-      explanationDiv.textContent = "";
+  startScanner();
+  barcodeDiv.textContent = "Skanuję kod kreskowy...";
+  resultDiv.textContent = "";
+  explanationDiv.textContent = "";
+  startBtn.disabled = true;
+  startBtn.textContent = "Skaner uruchomiony";
     });
   </script>
 </body>
